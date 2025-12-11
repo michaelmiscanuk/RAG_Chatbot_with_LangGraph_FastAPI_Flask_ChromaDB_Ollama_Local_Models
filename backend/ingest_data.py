@@ -1,0 +1,82 @@
+import os
+import sys
+import asyncio
+import pandas as pd
+from pathlib import Path
+from dotenv import load_dotenv
+from langchain_chroma import Chroma
+from langchain_core.documents import Document
+
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+from src.config.models import get_langchain_azure_embedding_model
+from src.utils.helpers import translate_text
+
+# Load environment variables
+load_dotenv()
+
+DATA_DIR = Path(__file__).parent / "data"
+CSV_PATH = DATA_DIR / "sample0.csv"
+CHROMA_DB_DIR = DATA_DIR / "chroma_db"
+
+
+async def process_row(row):
+    """Process a single row: format, translate, and create document."""
+    # Combine fields into a single text chunk
+    original_text = (
+        f"Subject: {row['subject']}\nBody: {row['body']}\nAnswer: {row['answer']}"
+    )
+
+    # Translate to English
+    try:
+        translated_text = await translate_text(original_text)
+        print(f"Translated row: {row['subject'][:30]}...")
+    except Exception as e:
+        print(f"Error translating row {row['subject'][:30]}...: {e}")
+        translated_text = original_text  # Fallback to original
+
+    # Create metadata
+    metadata = {
+        "subject": row["subject"],
+        "type": row["type"],
+        "language": row["language"],
+        "original_text": original_text,
+    }
+
+    return Document(page_content=translated_text, metadata=metadata)
+
+
+async def main():
+    print(f"Reading data from {CSV_PATH}...")
+    if not CSV_PATH.exists():
+        print(f"Error: {CSV_PATH} not found.")
+        return
+
+    df = pd.read_csv(CSV_PATH)
+    print(f"Found {len(df)} records.")
+
+    documents = []
+    for index, row in df.iterrows():
+        doc = await process_row(row)
+        documents.append(doc)
+
+    print(f"Prepared {len(documents)} documents.")
+
+    print("Initializing Embedding Model...")
+    embedding_model = get_langchain_azure_embedding_model()
+
+    print(f"Creating/Overwriting ChromaDB at {CHROMA_DB_DIR}...")
+    # Initialize Chroma and add documents
+    # persist_directory will save data to disk
+    vectorstore = Chroma.from_documents(
+        documents=documents,
+        embedding=embedding_model,
+        persist_directory=str(CHROMA_DB_DIR),
+    )
+
+    print("Data ingestion complete!")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

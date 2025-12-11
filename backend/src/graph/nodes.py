@@ -6,12 +6,15 @@ processing in the workflow. Each node receives the current state
 and returns updates to it.
 """
 
+import os
 import logging
-from typing import Dict, Any
-from langchain_core.messages import SystemMessage, HumanMessage
+from typing import Dict, Any, List
+from pathlib import Path
+from langchain_chroma import Chroma
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
-from .state import TextAnalysisState
-from ..config.models import get_model
+from .state import ChatState
+from ..config.models import get_model, get_langchain_azure_embedding_model
 
 # Configure logging
 logging.basicConfig(
@@ -19,158 +22,86 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+DATA_DIR = Path(__file__).parent.parent.parent / "data"
+CHROMA_DB_DIR = DATA_DIR / "chroma_db"
 
-def input_processor(state: TextAnalysisState) -> Dict[str, Any]:
+
+def retrieve(state: ChatState) -> Dict[str, Any]:
     """
-    First node: Process input text and calculate word count
-
-    This node reads the input_text from state and calculates
-    the word count, which it returns as a state update.
-
-    Args:
-        state: Current state containing input_text
-
-    Returns:
-        Dictionary with word_count update
+    Retrieve relevant documents from ChromaDB based on the last user message.
     """
-    logger.info("=" * 60)
-    logger.info("NODE 1: Input Processor - Starting")
-    logger.info("=" * 60)
+    logger.info("NODE: Retrieve - Starting")
 
-    input_text = state.get("input_text", "")
+    messages = state.get("messages", [])
+    if not messages:
+        logger.warning("No messages found in state")
+        return {"context": []}
 
-    if not input_text:
-        logger.warning("No input text provided")
-        return {"word_count": 0}
+    last_message = messages[-1]
+    query = last_message.content
 
-    # Calculate word count
-    words = input_text.split()
-    word_count = len(words)
-
-    logger.info(f"Input text length: {len(input_text)} characters")
-    logger.info(f"Word count calculated: {word_count} words")
-    logger.info(f"First 100 characters: {input_text[:100]}...")
-
-    logger.info("=" * 60)
-    logger.info("NODE 1: Input Processor - Completed")
-    logger.info("=" * 60)
-
-    return {"word_count": word_count}
-
-
-def summarizer(
-    state: TextAnalysisState, model_name: str = "llama3.2"
-) -> Dict[str, Any]:
-    """
-    Second node: Generate summary and sentiment analysis
-
-    This node reads the input_text and word_count from state,
-    then uses an LLM to generate both a summary and sentiment
-    analysis, returning both as state updates.
-
-    Args:
-        state: Current state containing input_text and word_count
-        model_name: Name of the Ollama model to use
-
-    Returns:
-        Dictionary with summary and sentiment updates
-    """
-    logger.info("=" * 60)
-    logger.info("NODE 2: Summarizer - Starting")
-    logger.info("=" * 60)
-
-    input_text = state.get("input_text", "")
-    word_count = state.get("word_count", 0)
-
-    logger.info(f"Processing text with {word_count} words")
-    logger.info(f"Using model: {model_name}")
-
-    if not input_text:
-        logger.warning("No input text to summarize")
-        return {"summary": "No text provided", "sentiment": "neutral"}
+    logger.info(f"Querying ChromaDB for: {query}")
 
     try:
-        # Get model instance
-        logger.info("Initializing LLM model...")
-        model = get_model(model_name=model_name, temperature=0.7)
+        if not CHROMA_DB_DIR.exists():
+            logger.warning(f"ChromaDB directory not found at {CHROMA_DB_DIR}")
+            return {"context": []}
 
-        # Generate summary
-        logger.info("Generating summary...")
-        summary_prompt = f"""Summarize the following text in 2-3 sentences. Be concise and capture the main points.
+        embedding_model = get_langchain_azure_embedding_model()
+        vectorstore = Chroma(
+            persist_directory=str(CHROMA_DB_DIR), embedding_function=embedding_model
+        )
 
-Text ({word_count} words):
-{input_text}
+        # Search for top 5 similar documents
+        docs = vectorstore.similarity_search(query, k=5)
+        context = [doc.page_content for doc in docs]
 
-Summary:"""
+        logger.info(f"Retrieved {len(context)} documents")
+        return {"context": context}
 
-        summary_messages = [
-            SystemMessage(
-                content="You are a helpful assistant that creates concise summaries."
-            ),
-            HumanMessage(content=summary_prompt),
-        ]
-
-        summary_response = model.invoke(summary_messages)
-        summary = summary_response.content.strip()
-
-        logger.info(f"Summary generated: {len(summary)} characters")
-        logger.info(f"Summary preview: {summary[:100]}...")
-
-        # Generate sentiment analysis
-        logger.info("Analyzing sentiment...")
-        sentiment_prompt = f"""Analyze the sentiment of the following text. 
-Respond with ONLY ONE WORD from these options: positive, negative, neutral, or mixed.
-
-Text:
-{input_text}
-
-Sentiment:"""
-
-        sentiment_messages = [
-            SystemMessage(
-                content="You are a sentiment analysis assistant. Respond with only one word: positive, negative, neutral, or mixed."
-            ),
-            HumanMessage(content=sentiment_prompt),
-        ]
-
-        sentiment_response = model.invoke(sentiment_messages)
-        sentiment = sentiment_response.content.strip().lower()
-
-        # Validate sentiment response
-        valid_sentiments = ["positive", "negative", "neutral", "mixed"]
-        if sentiment not in valid_sentiments:
-            logger.warning(f"Invalid sentiment '{sentiment}', defaulting to 'neutral'")
-            sentiment = "neutral"
-
-        logger.info(f"Sentiment detected: {sentiment}")
-
-        logger.info("=" * 60)
-        logger.info("NODE 2: Summarizer - Completed")
-        logger.info("=" * 60)
-
-        return {"summary": summary, "sentiment": sentiment}
-
-    except (ValueError, TypeError, ConnectionError, TimeoutError) as e:
-        logger.error("Error in summarizer node: %s", str(e), exc_info=True)
-        return {"summary": f"Error generating summary: {str(e)}", "sentiment": "error"}
+    except Exception as e:
+        logger.error(f"Error in retrieve node: {e}")
+        return {"context": []}
 
 
-# Node function factories for dependency injection
-def create_summarizer_node(model_name: str = "llama3.2"):
+def generate(state: ChatState) -> Dict[str, Any]:
     """
-    Create a summarizer node with a specific model
-
-    This is a factory function that returns a node function
-    configured with a specific model name.
-
-    Args:
-        model_name: Name of the Ollama model to use
-
-    Returns:
-        Node function configured with the model
+    Generate a response using the LLM, context, and conversation history.
     """
+    logger.info("NODE: Generate - Starting")
 
-    def node(state: TextAnalysisState) -> Dict[str, Any]:
-        return summarizer(state, model_name=model_name)
+    messages = state.get("messages", [])
+    context = state.get("context", [])
 
-    return node
+    # Format context
+    context_str = "\n\n".join(context) if context else "No relevant information found."
+
+    system_prompt = f"""You are a helpful customer support assistant. 
+Use the following context to answer the user's question. 
+If the answer is not in the context, politely say that you don't have the answer and suggest contacting human support at support@example.com.
+Keep your answers concise and helpful.
+
+Context:
+{context_str}
+"""
+
+    # Prepare messages for LLM
+    # We prepend the system prompt to the conversation history
+    prompt_messages = [SystemMessage(content=system_prompt)] + messages
+
+    try:
+        model = get_model(temperature=0.7)
+        response = model.invoke(prompt_messages)
+
+        logger.info("Response generated")
+        return {"messages": [response]}
+
+    except Exception as e:
+        logger.error(f"Error in generate node: {e}")
+        return {
+            "messages": [
+                AIMessage(
+                    content="I apologize, but I encountered an error while processing your request."
+                )
+            ]
+        }

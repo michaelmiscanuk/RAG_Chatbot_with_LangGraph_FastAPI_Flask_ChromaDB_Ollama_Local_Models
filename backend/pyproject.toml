@@ -51,6 +51,12 @@ dependencies = [
     
     # Optional: For better performance
     "orjson>=3.10.0",
+
+    # RAG & Data
+    "chromadb>=0.4.22",
+    "langchain-chroma>=0.1.0",
+    "langchain-openai>=0.1.0",
+    "pandas>=2.2.0",
 ]
 
 [project.optional-dependencies]

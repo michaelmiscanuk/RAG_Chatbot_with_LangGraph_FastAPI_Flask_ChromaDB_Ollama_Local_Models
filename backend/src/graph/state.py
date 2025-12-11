@@ -6,28 +6,18 @@ all nodes in the graph. The state persists throughout execution
 and nodes can read from and write to it.
 """
 
-from typing import TypedDict
+from typing import TypedDict, Annotated, List
+from langchain_core.messages import BaseMessage
+from langgraph.graph.message import add_messages
 
 
-class TextAnalysisState(TypedDict):
+class ChatState(TypedDict):
     """
-    State schema for the text analysis workflow
+    State schema for the chatbot workflow
 
-    This state contains three distinct fields that are updated
-    by different nodes in the workflow:
-
-    - input_text: The original text provided by the user (set initially)
-    - word_count: Number of words in the input (set by input_processor node)
-    - summary: Generated summary of the text (set by summarizer node)
-    - sentiment: Sentiment analysis result (set by summarizer node)
+    - messages: Conversation history (list of messages)
+    - context: Retrieved documents from ChromaDB
     """
 
-    # Input field - provided by user
-    input_text: str
-
-    # Metadata field - set by input_processor node
-    word_count: int
-
-    # Output fields - set by summarizer node
-    summary: str
-    sentiment: str
+    messages: Annotated[List[BaseMessage], add_messages]
+    context: List[str]

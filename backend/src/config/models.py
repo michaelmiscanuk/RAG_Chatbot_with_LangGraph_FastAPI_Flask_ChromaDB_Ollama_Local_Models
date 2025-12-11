@@ -10,6 +10,7 @@ Ollama models with different parameters.
 import os
 from typing import Optional
 from langchain_ollama import ChatOllama
+from langchain_openai import AzureOpenAIEmbeddings
 
 
 class MockChatOllama:
@@ -172,4 +173,23 @@ def get_model_from_preset(preset_name: str = "balanced") -> ChatOllama:
         base_url=config.base_url,
         num_ctx=config.num_ctx,
         format="",
+    )
+
+
+def get_langchain_azure_embedding_model(model_name="text-embedding-3-large__test1"):
+    """Get a LangChain AzureOpenAIEmbeddings instance with standard configuration.
+
+    Args:
+        model_name (str): The name of the embedding model deployment
+
+    Returns:
+        AzureOpenAIEmbeddings: Configured embedding model instance
+    """
+
+    return AzureOpenAIEmbeddings(
+        model=model_name,
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
+        deployment=model_name,
     )

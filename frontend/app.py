@@ -138,6 +138,73 @@ def analyze():
         )
 
 
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    """
+    Proxy endpoint to backend Chat API
+    """
+    try:
+        # Get form data
+        data = request.get_json()
+        message = data.get("message", "").strip()
+        thread_id = data.get("thread_id")
+
+        logger.info(f"Received chat request. Message length: {len(message)}")
+        if thread_id:
+            logger.info(f"Thread ID: {thread_id}")
+
+        if not message:
+            return jsonify({"success": False, "error": "Message cannot be empty"}), 400
+
+        # Forward request to backend API
+        backend_url = f"{API_BASE_URL}/api/chat"
+        logger.info(f"Forwarding to backend: {backend_url}")
+
+        response = requests.post(
+            backend_url,
+            json={"message": message, "thread_id": thread_id},
+            timeout=60,
+        )
+
+        # Check if request was successful
+        if response.status_code == 200:
+            result = response.json()
+            logger.info("Chat request completed successfully")
+            return jsonify(result), 200
+        else:
+            try:
+                error_detail = response.json().get("detail", "Unknown error")
+            except:
+                error_detail = f"Status code: {response.status_code}"
+            
+            logger.error(f"Backend error: {error_detail}")
+            return (
+                jsonify({"success": False, "error": f"Backend error: {error_detail}"}),
+                response.status_code,
+            )
+
+    except requests.exceptions.ConnectionError:
+        logger.error(f"Cannot connect to backend at {API_BASE_URL}")
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Cannot connect to backend API. Please make sure the backend is running.",
+                }
+            ),
+            503,
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error in chat proxy: {str(e)}", exc_info=True)
+        return (
+            jsonify(
+                {"success": False, "error": f"An unexpected error occurred: {str(e)}"}
+            ),
+            500,
+        )
+
+
 @app.route("/api/models", methods=["GET"])
 def get_models():
     """

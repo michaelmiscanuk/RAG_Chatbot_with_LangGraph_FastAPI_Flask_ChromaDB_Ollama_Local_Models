@@ -1,7 +1,7 @@
 """
-FastAPI REST API for LangGraph Text Analysis Backend
+FastAPI REST API for LangGraph Chatbot Backend
 
-This module provides REST API endpoints for the text analysis workflow.
+This module provides REST API endpoints for the chatbot workflow.
 Designed to be deployed on Render.com and accessed by the frontend.
 """
 
@@ -13,13 +13,11 @@ from typing import Optional
 import logging
 import sys
 import os
+import uuid
 from pathlib import Path
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
-
-# from src.graph.workflow import run_workflow  # Import later to avoid startup issues
-# from src.utils.helpers import validate_input  # Import later to avoid startup issues
 
 # Configure logging
 logging.basicConfig(
@@ -29,8 +27,8 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Text Analysis API",
-    description="LangGraph-powered text analysis with summary and sentiment",
+    title="Chatbot API",
+    description="LangGraph-powered chatbot with RAG",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -52,43 +50,19 @@ app.add_middleware(
 
 
 # Request/Response models
-class TextAnalysisRequest(BaseModel):
-    """Request model for text analysis"""
+class ChatRequest(BaseModel):
+    """Request model for chat"""
 
-    text: str = Field(
-        ..., min_length=1, max_length=10000, description="The text to analyze"
-    )
-    model_name: Optional[str] = Field(
-        default="qwen2.5-coder:0.5b",
-        description="Ollama model name to use for analysis",
-    )
+    message: str = Field(..., min_length=1, description="User message")
+    thread_id: Optional[str] = Field(None, description="Conversation ID for history")
 
 
-class TextAnalysisResponse(BaseModel):
-    """Response model for text analysis"""
+class ChatResponse(BaseModel):
+    """Response model for chat"""
 
-    input_text: str
-    word_count: int
-    character_count: int
-    summary: str
-    sentiment: str
-    model_used: str
+    response: str
+    thread_id: str
     success: bool = True
-
-
-class HealthResponse(BaseModel):
-    """Health check response"""
-
-    status: str
-    message: str
-
-
-class ErrorResponse(BaseModel):
-    """Error response model"""
-
-    success: bool = False
-    error: str
-    detail: Optional[str] = None
 
 
 # API Endpoints
@@ -99,7 +73,7 @@ async def root():
     """
     return {
         "status": "healthy",
-        "message": "Text Analysis API is running. Visit /docs for API documentation.",
+        "message": "Chatbot API is running. Visit /docs for API documentation.",
     }
 
 
@@ -111,54 +85,50 @@ async def health_check():
     return {"status": "healthy", "message": "API is operational"}
 
 
-@app.post("/api/analyze")
-async def analyze_text(request: TextAnalysisRequest):
+@app.post("/api/chat")
+async def chat(request: ChatRequest):
     """
-    Analyze text and return summary with sentiment
+    Chat with the bot
 
     Args:
-        request: TextAnalysisRequest with text and optional model_name
+        request: ChatRequest with message and optional thread_id
 
     Returns:
-        TextAnalysisResponse with analysis results
-
-    Raises:
-        HTTPException: If validation or processing fails
+        ChatResponse with AI response
     """
     try:
-        logger.info("Received analysis request for %d characters", len(request.text))
+        logger.info(f"Received chat request. Message: {request.message[:50]}...")
 
-        # Validate input
-        from src.utils.helpers import validate_input
-
-        is_valid, error_message = validate_input(request.text)
-        if not is_valid:
-            logger.warning("Invalid input: %s", error_message)
-            raise HTTPException(status_code=400, detail=error_message)
+        # Generate thread_id if not provided
+        thread_id = request.thread_id or str(uuid.uuid4())
+        logger.info(f"Using thread_id: {thread_id}")
 
         # Run workflow
         from src.graph.workflow import run_workflow
 
-        logger.info("Running workflow with model: %s", request.model_name)
-        result = run_workflow(
-            input_text=request.text,
-            model_name=request.model_name,
-            thread_id=None,  # Each request is independent
-        )
+        logger.info(f"Running workflow for thread {thread_id}")
+        try:
+            result = run_workflow(input_text=request.message, thread_id=thread_id)
+            logger.info("Workflow execution completed")
+        except Exception as wf_error:
+            logger.error(f"Workflow execution failed: {wf_error}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Workflow error: {str(wf_error)}")
 
-        # Prepare response
-        response = {
-            "input_text": result["input_text"],
-            "word_count": result["word_count"],
-            "character_count": len(request.text),
-            "summary": result["summary"],
-            "sentiment": result["sentiment"],
-            "model_used": request.model_name,
+        # Get the last message (AI response)
+        messages = result.get("messages", [])
+        last_message = messages[-1] if messages else None
+        response_text = (
+            last_message.content if last_message else "No response generated."
+        )
+        
+        logger.info(f"Response generated: {response_text[:50]}...")
+
+        logger.info("Chat completed successfully")
+        return {
+            "response": response_text,
+            "thread_id": thread_id,
             "success": True,
         }
-
-        logger.info("Analysis completed successfully")
-        return response
 
     except HTTPException:
         raise
@@ -167,55 +137,6 @@ async def analyze_text(request: TextAnalysisRequest):
         raise HTTPException(
             status_code=500, detail="Internal server error: %s" % str(e)
         )
-
-
-@app.get("/api/models")
-async def list_models():
-    """
-    List available Ollama models
-
-    Returns:
-        List of available model names
-    """
-    # Default models that should be available
-    # In production, you might want to query Ollama directly
-    models = [
-        "qwen2.5-coder:0.5b",
-        "llama3.2",
-        "llama3.2:1b",
-        "llama3.2:3b",
-        "mistral",
-        "codellama",
-    ]
-    return {"models": models, "default": "qwen2.5-coder:0.5b"}
-
-
-# Error handlers
-@app.exception_handler(404)
-async def not_found_handler(request, exc):
-    """Handle 404 errors"""
-    return JSONResponse(
-        status_code=404,
-        content={
-            "success": False,
-            "error": "Endpoint not found",
-            "detail": str(exc),
-        },
-    )
-
-
-@app.exception_handler(500)
-async def internal_error_handler(request, exc):
-    """Handle 500 errors"""
-    logger.error("Internal server error: %s", str(exc), exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "success": False,
-            "error": "Internal server error",
-            "detail": "An unexpected error occurred. Please try again later.",
-        },
-    )
 
 
 # Run with: uvicorn api:app --reload --host 0.0.0.0 --port 8000
