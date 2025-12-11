@@ -21,6 +21,7 @@ import sys
 import hashlib
 import logging
 import math
+import time
 import asyncio
 import pandas as pd
 from collections import Counter
@@ -66,12 +67,53 @@ from openai import AzureOpenAI
 from langchain_openai import AzureOpenAIEmbeddings
 from langchain_chroma import Chroma
 
+# Import embedding model configuration
+try:
+    from langchain_ollama import OllamaEmbeddings
+except ImportError:
+    OllamaEmbeddings = None
+
 # ==============================================================================
 # CONSTANTS & CONFIGURATION
 # ==============================================================================
 CSV_PATH = BASE_DIR / "backend" / "data" / "sample0.csv"
-CHROMA_DB_DIR = BASE_DIR / "backend" / "data" / "chroma_db"
 MAX_TOKENS = 8190
+
+
+def get_chromadb_dir():
+    """Get ChromaDB directory with embedding model suffix."""
+    provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+    if provider == "azure":
+        model_name = os.getenv(
+            "AZURE_EMBEDDING_DEPLOYMENT", "text-embedding-3-small_mimi"
+        )
+    else:
+        model_name = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+    # Sanitize model name for use in paths
+    model_name = model_name.replace("/", "-").replace("\\", "-").replace(":", "-")
+    return BASE_DIR / "backend" / "data" / f"chroma_db_{model_name}"
+
+
+def get_collection_name():
+    """Get collection name with embedding model suffix."""
+    provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+    if provider == "azure":
+        model_name = os.getenv(
+            "AZURE_EMBEDDING_DEPLOYMENT", "text-embedding-3-small_mimi"
+        )
+    else:
+        model_name = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+    # Sanitize model name for collection names
+    model_name = (
+        model_name.replace("/", "-")
+        .replace("\\", "-")
+        .replace(":", "-")
+        .replace(".", "_")
+    )
+    return f"chatbot_{model_name}"
+
+
+CHROMA_DB_DIR = get_chromadb_dir()
 
 # Configure logging
 logging.basicConfig(
@@ -101,6 +143,48 @@ def get_langchain_azure_embedding_model(deployment_name="text-embedding-3-small_
         openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
         deployment=deployment_name,
     )
+
+
+def get_embedding_model():
+    """
+    Get the configured embedding model based on environment variables.
+
+    Returns either Ollama or Azure embeddings based on EMBEDDING_PROVIDER setting.
+    Default is Ollama with nomic-embed-text model.
+
+    Environment Variables:
+        EMBEDDING_PROVIDER: "ollama" (default) or "azure"
+        EMBEDDING_MODEL: Model name (default: "nomic-embed-text" for Ollama)
+        AZURE_EMBEDDING_DEPLOYMENT: Azure deployment name (when using Azure)
+        OLLAMA_BASE_URL: Ollama API URL (default: http://localhost:11434)
+
+    Returns:
+        Embedding model instance (OllamaEmbeddings or AzureOpenAIEmbeddings)
+    """
+    provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+
+    if provider == "azure":
+        # Use Azure OpenAI embeddings
+        deployment_name = os.getenv(
+            "AZURE_EMBEDDING_DEPLOYMENT", "text-embedding-3-small_mimi"
+        )
+        return get_langchain_azure_embedding_model(deployment_name=deployment_name)
+    else:
+        # Use Ollama embeddings (default)
+        if OllamaEmbeddings is None:
+            raise ImportError(
+                "OllamaEmbeddings not available. Install with: pip install langchain-ollama"
+            )
+
+        model_name = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+        base_url = os.getenv(
+            "OLLAMA_HOST", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        )
+
+        return OllamaEmbeddings(
+            model=model_name,
+            base_url=base_url,
+        )
 
 
 def get_document_hash(text: str) -> str:
@@ -269,14 +353,11 @@ def hybrid_search(
 
     try:
         # Step 1: Semantic search
-        embedding_client = get_azure_embedding_model()
-        query_embedding = (
-            embedding_client.embeddings.create(
-                input=[query_text], model="text-embedding-3-small_mimi"
-            )
-            .data[0]
-            .embedding
-        )
+        # Get embedding model (Ollama or Azure based on config)
+        embedding_model = get_embedding_model()
+
+        # Generate query embedding
+        query_embedding = embedding_model.embed_query(query_text)
 
         semantic_results = collection.query(
             query_embeddings=[query_embedding],
@@ -402,9 +483,20 @@ def hybrid_search(
 # CHROMADB OPERATIONS
 # ==============================================================================
 async def upsert_documents_to_chromadb(
-    deployment: str = "text-embedding-3-small_mimi",
-    collection_name: str = "chatbot_collection",
+    deployment: str = None,  # Kept for backward compatibility but ignored
+    collection_name: str = None,  # Auto-generated if not provided
 ) -> chromadb.Collection:
+    """Load documents from CSV and add to ChromaDB.
+
+    Args:
+        deployment: Deprecated, kept for backward compatibility
+        collection_name: Collection name. If None, auto-generated with embedding model suffix
+    """
+    if collection_name is None:
+        collection_name = get_collection_name()
+
+    # Update CHROMA_DB_DIR to current model's directory
+    chroma_db_dir = get_chromadb_dir()
     """Load documents from CSV and add to ChromaDB."""
     metrics = Metrics()
 
@@ -419,14 +511,14 @@ async def upsert_documents_to_chromadb(
         if not documents:
             raise ValueError("No documents loaded from CSV")
 
-        # Initialize embedding model
-        embedding_model = get_langchain_azure_embedding_model()
+        # Initialize embedding model (Ollama or Azure based on config)
+        embedding_model = get_embedding_model()
 
         # Initialize ChromaDB
-        logger.info(f"Creating ChromaDB at {CHROMA_DB_DIR}...")
-        CHROMA_DB_DIR.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Creating ChromaDB at {chroma_db_dir}...")
+        chroma_db_dir.mkdir(parents=True, exist_ok=True)
 
-        client = chromadb.PersistentClient(path=str(CHROMA_DB_DIR))
+        client = chromadb.PersistentClient(path=str(chroma_db_dir))
 
         # Delete existing collection if it exists
         try:
@@ -444,54 +536,98 @@ async def upsert_documents_to_chromadb(
         # Process documents
         logger.info(f"Processing {len(documents)} documents...")
 
-        batch_size = 10
-        for i in tqdm_module.tqdm(
-            range(0, len(documents), batch_size), desc="Adding documents"
-        ):
+        # Increase batch size for better GPU utilization
+        # GPU memory is underutilized, so we can process larger batches
+        batch_size = 20  # Increased to 20 for better GPU utilization
+
+        # Prepare all batches
+        batches = []
+        for i in range(0, len(documents), batch_size):
             batch = documents[i : i + batch_size]
             texts = [doc.page_content for doc in batch]
             metadatas = [doc.metadata for doc in batch]
             ids = [str(uuid4()) for _ in batch]
+            batches.append((texts, metadatas, ids))
 
-            try:
-                # Generate embeddings
-                embeddings = embedding_model.embed_documents(texts)
+        logger.info(f"Processing {len(batches)} batches with batch_size={batch_size}")
 
-                # Validate embeddings format
-                if not isinstance(embeddings, list):
-                    logger.error(f"Embeddings is not a list: {type(embeddings)}")
-                    raise TypeError(
-                        f"Expected list of embeddings, got {type(embeddings)}"
-                    )
+        # Process batches with retry logic for transient Ollama connection errors
+        for batch_idx, (texts, metadatas, ids) in enumerate(
+            tqdm_module.tqdm(batches, desc="Adding documents")
+        ):
+            # Retry logic for connection errors
+            max_retries = 3
+            retry_delay = 2  # seconds
 
-                # Ensure embeddings is a list of lists (vectors)
-                validated_embeddings = []
-                for idx, emb in enumerate(embeddings):
-                    if isinstance(emb, (list, tuple)):
-                        validated_embeddings.append(list(emb))
-                    elif hasattr(emb, "__iter__") and not isinstance(emb, str):
-                        validated_embeddings.append(list(emb))
-                    else:
-                        logger.error(f"Invalid embedding at index {idx}: {type(emb)}")
+            for retry in range(max_retries):
+                try:
+                    # Generate embeddings for the entire batch at once
+                    # Ollama will handle this efficiently with GPU if available
+                    embeddings = embedding_model.embed_documents(texts)
+
+                    # Validate embeddings format
+                    if not isinstance(embeddings, list):
+                        logger.error(f"Embeddings is not a list: {type(embeddings)}")
                         raise TypeError(
-                            f"Invalid embedding type at index {idx}: {type(emb)}"
+                            f"Expected list of embeddings, got {type(embeddings)}"
                         )
 
-                # Add to collection
-                collection.add(
-                    documents=texts,
-                    embeddings=validated_embeddings,
-                    metadatas=metadatas,
-                    ids=ids,
-                )
+                    # Ensure embeddings is a list of lists (vectors)
+                    validated_embeddings = []
+                    for idx, emb in enumerate(embeddings):
+                        if isinstance(emb, (list, tuple)):
+                            validated_embeddings.append(list(emb))
+                        elif hasattr(emb, "__iter__") and not isinstance(emb, str):
+                            validated_embeddings.append(list(emb))
+                        else:
+                            logger.error(
+                                f"Invalid embedding at index {idx}: {type(emb)}"
+                            )
+                            raise TypeError(
+                                f"Invalid embedding type at index {idx}: {type(emb)}"
+                            )
 
-                metrics.processed_docs += len(batch)
-            except Exception as e:
-                logger.error(f"Error processing batch {i}: {e}")
-                import traceback
+                    # Add to collection
+                    collection.add(
+                        documents=texts,
+                        embeddings=validated_embeddings,
+                        metadatas=metadatas,
+                        ids=ids,
+                    )
 
-                logger.error(traceback.format_exc())
-                metrics.failed_docs += len(batch)
+                    metrics.processed_docs += len(texts)
+                    break  # Success, exit retry loop
+
+                except Exception as e:
+                    error_msg = str(e)
+                    # Check if it's a transient connection error
+                    if (
+                        "connection" in error_msg.lower()
+                        or "500" in error_msg
+                        or retry < max_retries - 1
+                    ):
+                        if retry < max_retries - 1:
+                            wait_time = retry_delay * (2**retry)  # Exponential backoff
+                            logger.warning(
+                                f"Batch {batch_idx} failed (attempt {retry + 1}/{max_retries}), retrying in {wait_time}s: {e}"
+                            )
+                            time.sleep(wait_time)
+                        else:
+                            logger.error(
+                                f"Batch {batch_idx} failed after {max_retries} attempts: {e}"
+                            )
+                            import traceback
+
+                            logger.error(traceback.format_exc())
+                            metrics.failed_docs += len(texts)
+                    else:
+                        # Non-retryable error
+                        logger.error(f"Error processing batch {batch_idx}: {e}")
+                        import traceback
+
+                        logger.error(traceback.format_exc())
+                        metrics.failed_docs += len(texts)
+                        break
 
         metrics.update_processing_time()
 
@@ -510,26 +646,45 @@ async def upsert_documents_to_chromadb(
 
 
 def get_chromadb_collection(
-    collection_name: str = "chatbot_collection",
+    collection_name: str = None,
 ) -> chromadb.Collection:
-    """Get an existing ChromaDB collection."""
-    client = chromadb.PersistentClient(path=str(CHROMA_DB_DIR))
-    return client.get_collection(name=collection_name)
+    """Get an existing ChromaDB collection.
+
+    Args:
+        collection_name: Collection name. If None, auto-generated with embedding model suffix
+
+    Note:
+        Falls back to 'chatbot_collection' if the model-specific collection doesn't exist,
+        for backward compatibility with existing ChromaDBs.
+    """
+    if collection_name is None:
+        collection_name = get_collection_name()
+
+    chroma_db_dir = get_chromadb_dir()
+    client = chromadb.PersistentClient(path=str(chroma_db_dir))
+
+    # Try to get the collection with the new name first
+    try:
+        return client.get_collection(name=collection_name)
+    except Exception:
+        # Fallback to old collection name for backward compatibility
+        logger.info(
+            f"Collection '{collection_name}' not found, trying fallback 'chatbot_collection'"
+        )
+        return client.get_collection(name="chatbot_collection")
 
 
 def similarity_search_chromadb(
     collection,
     embedding_client,
     query: str,
-    deployment_name: str = "text-embedding-3-small_mimi",
+    deployment_name: str = None,  # Deprecated - kept for backward compatibility
     k: int = 3,
 ):
     """Perform pure embedding-based similarity search."""
-    query_embedding = (
-        embedding_client.embeddings.create(input=[query], model=deployment_name)
-        .data[0]
-        .embedding
-    )
+    # Use the configured embedding model instead of Azure-specific client
+    embedding_model = get_embedding_model()
+    query_embedding = embedding_model.embed_query(query)
 
     results = collection.query(
         query_embeddings=[query_embedding],

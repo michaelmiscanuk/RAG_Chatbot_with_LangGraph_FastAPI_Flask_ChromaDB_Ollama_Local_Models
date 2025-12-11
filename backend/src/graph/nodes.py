@@ -16,7 +16,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.documents import Document
 
 from .state import ChatState
-from ..config.models import get_model, get_langchain_azure_embedding_model
+from ..config.models import get_model, get_embedding_model, get_embedding_model_name
 
 # Configure logging
 logging.basicConfig(
@@ -25,7 +25,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
-CHROMA_DB_DIR = DATA_DIR / "chroma_db"
+
+
+def get_chromadb_dir():
+    """Get ChromaDB directory with embedding model suffix."""
+    model_name = get_embedding_model_name()
+    return DATA_DIR / f"chroma_db_{model_name}"
+
+
+CHROMA_DB_DIR = get_chromadb_dir()
 
 # Add data directory to path for importing chromadb_manager
 sys.path.insert(0, str(DATA_DIR))
@@ -93,7 +101,7 @@ def retrieve(state: ChatState) -> Dict[str, Any]:
 
         # Fallback to simple semantic search
         logger.info("Using simple semantic search")
-        embedding_model = get_langchain_azure_embedding_model()
+        embedding_model = get_embedding_model()
         vectorstore = Chroma(
             persist_directory=str(CHROMA_DB_DIR), embedding_function=embedding_model
         )

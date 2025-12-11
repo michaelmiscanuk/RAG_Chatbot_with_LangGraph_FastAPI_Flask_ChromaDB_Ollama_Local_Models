@@ -189,6 +189,12 @@ from openai import AzureOpenAI
 from langchain_openai import AzureOpenAIEmbeddings
 from api.utils.debug import print__chromadb_debug
 
+# Import Ollama embeddings with fallback
+try:
+    from langchain_ollama import OllamaEmbeddings
+except ImportError:
+    OllamaEmbeddings = None
+
 
 # ===============================================================================
 # Azure Embedding Models
@@ -224,6 +230,48 @@ def get_langchain_azure_embedding_model(model_name="text-embedding-3-small_mimi"
         openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
         deployment=model_name,
     )
+
+
+def get_embedding_model():
+    """
+    Get the configured embedding model based on environment variables.
+
+    Returns either Ollama or Azure embeddings based on EMBEDDING_PROVIDER setting.
+    Default is Ollama with nomic-embed-text model.
+
+    Environment Variables:
+        EMBEDDING_PROVIDER: "ollama" (default) or "azure"
+        EMBEDDING_MODEL: Model name (default: "nomic-embed-text" for Ollama)
+        AZURE_EMBEDDING_DEPLOYMENT: Azure deployment name (when using Azure)
+        OLLAMA_BASE_URL: Ollama API URL (default: http://localhost:11434)
+
+    Returns:
+        Embedding model instance (OllamaEmbeddings or AzureOpenAIEmbeddings)
+    """
+    provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+
+    if provider == "azure":
+        # Use Azure OpenAI embeddings
+        deployment_name = os.getenv(
+            "AZURE_EMBEDDING_DEPLOYMENT", "text-embedding-3-small_mimi"
+        )
+        return get_langchain_azure_embedding_model(model_name=deployment_name)
+    else:
+        # Use Ollama embeddings (default)
+        if OllamaEmbeddings is None:
+            raise ImportError(
+                "OllamaEmbeddings not available. Install with: pip install langchain-ollama"
+            )
+
+        model_name = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+        base_url = os.getenv(
+            "OLLAMA_HOST", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        )
+
+        return OllamaEmbeddings(
+            model=model_name,
+            base_url=base_url,
+        )
 
 
 # ==============================================================================

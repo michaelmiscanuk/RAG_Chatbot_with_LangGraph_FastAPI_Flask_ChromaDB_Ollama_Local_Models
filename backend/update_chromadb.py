@@ -8,6 +8,7 @@ Usage:
 """
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -37,10 +38,17 @@ async def main():
     print()
 
     try:
-        collection = await upsert_documents_to_chromadb(
-            deployment="text-embedding-3-small_mimi",
-            collection_name="chatbot_collection",
+        # Collection name is auto-generated based on embedding model
+        from chromadb_manager import get_chromadb_dir, get_collection_name
+
+        print(
+            f"Using embedding model: {os.getenv('EMBEDDING_PROVIDER', 'ollama')} - {os.getenv('EMBEDDING_MODEL', 'nomic-embed-text') if os.getenv('EMBEDDING_PROVIDER', 'ollama') == 'ollama' else os.getenv('AZURE_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small_mimi')}"
         )
+        print(f"ChromaDB path: {get_chromadb_dir()}")
+        print(f"Collection name: {get_collection_name()}")
+        print()
+
+        collection = await upsert_documents_to_chromadb()
 
         print()
         print("=" * 70)

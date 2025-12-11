@@ -9,6 +9,7 @@ Usage:
 """
 
 import asyncio
+import os
 import sys
 import shutil
 from pathlib import Path
@@ -34,8 +35,20 @@ async def main():
     print()
 
     try:
+        # Get the dynamic ChromaDB path based on embedding model
+        from chromadb_manager import get_chromadb_dir, get_collection_name
+
+        chroma_db_path = get_chromadb_dir()
+        collection_name = get_collection_name()
+
+        print(
+            f"Using embedding model: {os.getenv('EMBEDDING_PROVIDER', 'ollama')} - {os.getenv('EMBEDDING_MODEL', 'nomic-embed-text') if os.getenv('EMBEDDING_PROVIDER', 'ollama') == 'ollama' else os.getenv('AZURE_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small_mimi')}"
+        )
+        print(f"ChromaDB path: {chroma_db_path}")
+        print(f"Collection name: {collection_name}")
+        print()
+
         # Clean up any corrupted ChromaDB database
-        chroma_db_path = Path(__file__).parent / "data" / "chroma_db"
         if chroma_db_path.exists():
             print(f"Removing existing ChromaDB at {chroma_db_path}...")
             try:
@@ -45,11 +58,8 @@ async def main():
                 print(f"⚠️  Warning: Could not remove existing database: {e}")
             print()
 
-        # Create and populate ChromaDB
-        collection = await upsert_documents_to_chromadb(
-            deployment="text-embedding-3-small_mimi",
-            collection_name="chatbot_collection",
-        )
+        # Create and populate ChromaDB (collection_name auto-generated)
+        collection = await upsert_documents_to_chromadb()
 
         print()
         print("=" * 70)

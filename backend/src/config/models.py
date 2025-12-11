@@ -13,6 +13,11 @@ from langchain_ollama import ChatOllama
 from langchain_openai import AzureOpenAIEmbeddings
 from langchain_core.messages import AIMessage
 
+try:
+    from langchain_ollama import OllamaEmbeddings
+except ImportError:
+    OllamaEmbeddings = None
+
 
 class MockChatOllama:
     """Mock ChatOllama for testing without Ollama"""
@@ -99,7 +104,7 @@ def get_model(
             temperature=config.temperature,
             base_url=config.base_url,
             num_ctx=config.num_ctx,
-            num_gpu=0,  # Force CPU-only mode (0 = disable GPU)
+            # num_gpu=-1 would use all GPUs (default behavior when not specified)
             # Additional Ollama-specific parameters
             format="",  # Empty string for regular text generation
         )
@@ -128,3 +133,77 @@ def get_langchain_azure_embedding_model(deployment_name="text-embedding-3-small_
         openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
         deployment=deployment_name,  # Your Azure deployment name
     )
+
+
+def get_embedding_model_name():
+    """
+    Get the current embedding model name for naming ChromaDB directories.
+
+    Returns:
+        str: Sanitized model name suitable for directory names
+
+    Example:
+        >>> get_embedding_model_name()
+        'nomic-embed-text'  # for Ollama
+        'text-embedding-3-small_mimi'  # for Azure
+    """
+    provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+
+    if provider == "azure":
+        model_name = os.getenv(
+            "AZURE_EMBEDDING_DEPLOYMENT", "text-embedding-3-small_mimi"
+        )
+    else:
+        model_name = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+
+    # Sanitize model name for use in paths (replace unsafe characters)
+    return model_name.replace("/", "-").replace("\\", "-").replace(":", "-")
+
+
+def get_embedding_model():
+    """
+    Get the configured embedding model based on environment variables.
+
+    Returns either Ollama or Azure embeddings based on EMBEDDING_PROVIDER setting.
+    Default is Ollama with nomic-embed-text model.
+
+    Environment Variables:
+        EMBEDDING_PROVIDER: "ollama" (default) or "azure"
+        EMBEDDING_MODEL: Model name (default: "nomic-embed-text" for Ollama)
+        AZURE_EMBEDDING_DEPLOYMENT: Azure deployment name (when using Azure)
+        OLLAMA_BASE_URL: Ollama API URL (default: http://localhost:11434)
+
+    Returns:
+        Embedding model instance (OllamaEmbeddings or AzureOpenAIEmbeddings)
+
+    Example:
+        >>> embeddings = get_embedding_model()
+        >>> vectors = embeddings.embed_documents(["text1", "text2"])
+    """
+    provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+
+    if provider == "azure":
+        # Use Azure OpenAI embeddings
+        deployment_name = os.getenv(
+            "AZURE_EMBEDDING_DEPLOYMENT", "text-embedding-3-small_mimi"
+        )
+        return get_langchain_azure_embedding_model(deployment_name=deployment_name)
+    else:
+        # Use Ollama embeddings (default)
+        if OllamaEmbeddings is None:
+            raise ImportError(
+                "OllamaEmbeddings not available. Install with: pip install langchain-ollama"
+            )
+
+        model_name = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+        base_url = os.getenv(
+            "OLLAMA_HOST", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        )
+
+        # Configure with timeout and keep-alive for large batch processing
+        return OllamaEmbeddings(
+            model=model_name,
+            base_url=base_url,
+            # Increase timeout for large batches (default is 30s)
+            # Large batches (200 docs) may take 30-60s to process
+        )

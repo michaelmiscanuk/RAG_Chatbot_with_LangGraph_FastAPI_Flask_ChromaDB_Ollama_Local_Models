@@ -3,6 +3,14 @@
 import os
 import zipfile
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv(
+    BASE_DIR / "backend" / ".env"
+    if "BASE_DIR" in dir()
+    else Path.cwd() / "backend" / ".env"
+)
 
 # Get the base directory
 try:
@@ -10,9 +18,27 @@ try:
 except NameError:
     BASE_DIR = Path(os.getcwd())
 
+load_dotenv(BASE_DIR / "backend" / ".env")
+
+
+# Get embedding model name for ChromaDB path
+def get_chromadb_path():
+    """Get ChromaDB path with embedding model suffix."""
+    provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+    if provider == "azure":
+        model_name = os.getenv(
+            "AZURE_EMBEDDING_DEPLOYMENT", "text-embedding-3-small_mimi"
+        )
+    else:
+        model_name = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+    # Sanitize model name for use in paths
+    model_name = model_name.replace("/", "-").replace("\\", "-").replace(":", "-")
+    return BASE_DIR / "backend" / "data" / f"chroma_db_{model_name}"
+
+
 # Configuration of paths to zip
 PATHS_TO_ZIP = [
-    BASE_DIR / "backend" / "data" / "chroma_db",  # ChromaDB for chatbot
+    get_chromadb_path(),  # ChromaDB for chatbot (with embedding model suffix)
 ]
 
 

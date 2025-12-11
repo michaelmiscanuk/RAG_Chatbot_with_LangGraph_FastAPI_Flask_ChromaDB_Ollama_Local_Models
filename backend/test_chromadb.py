@@ -21,7 +21,7 @@ from chromadb_manager import (
     get_chromadb_collection,
     hybrid_search,
     similarity_search_chromadb,
-    get_azure_embedding_model,
+    get_embedding_model,
 )
 from langchain_core.documents import Document
 
@@ -40,15 +40,15 @@ async def test_search(query: str):
         print("✅ Collection loaded")
         print()
 
-        # Get embedding client
-        embedding_client = get_azure_embedding_model()
+        # Get embedding model (configured via env vars)
+        embedding_model = get_embedding_model()
 
         # Test 1: Simple semantic search
         print("[1/3] Simple Semantic Search")
         print("-" * 70)
         semantic_results = similarity_search_chromadb(
             collection=collection,
-            embedding_client=embedding_client,
+            embedding_client=embedding_model,  # Note: parameter name kept for compatibility
             query=query,
             k=5,
         )
