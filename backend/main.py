@@ -7,6 +7,10 @@ This script provides a CLI interface to chat with the bot.
 import sys
 import uuid
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
