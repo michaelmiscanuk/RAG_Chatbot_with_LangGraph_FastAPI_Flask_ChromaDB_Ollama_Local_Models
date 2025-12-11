@@ -11,13 +11,14 @@ import os
 from typing import Optional
 from langchain_ollama import ChatOllama
 from langchain_openai import AzureOpenAIEmbeddings
+from langchain_core.messages import AIMessage
 
 
 class MockChatOllama:
     """Mock ChatOllama for testing without Ollama"""
 
     def invoke(self, messages):
-        return type("Response", (), {"content": "Mock response from Chatbot"})()
+        return AIMessage(content="Mock response from Chatbot")
 
 
 class ModelConfig:
