@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI-powered text analysis with sentiment detection and summarization using LangGraph">
+    <title>Text Analysis - AI-Powered Insights</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <nav class="nav">
+                <a href="/" class="logo">✨ Text Analyzer</a>
+                <ul class="nav-links">
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/about">About</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Hero Section -->
+            <div class="text-center mb-4">
+                <h1>AI-Powered Text Analysis</h1>
+                <p class="mb-3" style="font-size: 1.2rem;">
+                    Transform your text into insights with advanced sentiment analysis and intelligent summarization
+                </p>
+            </div>
+
+            <!-- Analysis Form -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Analyze Your Text</h2>
+                    <p class="card-subtitle">Enter any text below and let our AI provide you with a summary and sentiment analysis</p>
+                </div>
+
+                <form id="analyzeForm">
+                    <!-- Text Input -->
+                    <div class="form-group">
+                        <label for="textInput" class="form-label">
+                            Your Text
+                            <span style="float: right; font-weight: normal; text-transform: none;">
+                                <span id="charCount">0</span> / 10,000 characters
+                            </span>
+                        </label>
+                        <textarea 
+                            id="textInput" 
+                            class="form-control" 
+                            placeholder="Paste your text here for analysis... Try news articles, reviews, social media posts, or any text you'd like to analyze!"
+                            maxlength="10000"
+                            required
+                        ></textarea>
+                    </div>
+
+                    <!-- Model Selection -->
+                    <div class="form-group">
+                        <label for="modelSelect" class="form-label">AI Model</label>
+                        <select id="modelSelect" class="form-control">
+                            <option value="qwen2.5-coder:0.5b">Qwen 2.5 Coder (Fast)</option>
+                            <option value="llama3.2">Llama 3.2 (Balanced)</option>
+                            <option value="mistral">Mistral (Accurate)</option>
+                        </select>
+                    </div>
+
+                    <!-- Error Alert -->
+                    <div id="errorAlert" class="alert alert-error hidden">
+                        <strong>⚠️ Error:</strong> <span class="alert-text">Something went wrong</span>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" id="analyzeBtn" class="btn btn-primary">
+                        ✨ Analyze Text
+                    </button>
+                </form>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading" class="card loading hidden">
+                <div class="spinner"></div>
+                <h3>Analyzing your text...</h3>
+                <p style="color: var(--text-muted);">This may take a moment</p>
+            </div>
+
+            <!-- Results Section -->
+            <div id="results" class="result-section hidden">
+                <!-- Statistics -->
+                <div class="card mb-3">
+                    <h2 class="card-title">📊 Statistics</h2>
+                    <div class="stat-grid">
+                        <div class="stat-card">
+                            <span class="stat-value" id="resultWordCount">0</span>
+                            <span class="stat-label">Words</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="resultCharCount">0</span>
+                            <span class="stat-label">Characters</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="resultModel">N/A</span>
+                            <span class="stat-label">Model Used</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <div class="card mb-3">
+                    <h2 class="card-title">📝 Summary</h2>
+                    <p id="summaryText" style="font-size: 1.1rem; line-height: 1.8; color: var(--text-secondary);">
+                        Your summary will appear here...
+                    </p>
+                </div>
+
+                <!-- Sentiment -->
+                <div class="card">
+                    <h2 class="card-title">💭 Sentiment Analysis</h2>
+                    <div style="display: flex; align-items: center; gap: 1rem; margin-top: 1rem;">
+                        <span style="color: var(--text-muted);">Detected Sentiment:</span>
+                        <span id="sentimentBadge" class="sentiment-badge sentiment-neutral">
+                            Neutral
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sample Texts (Optional) -->
+            <div class="card mt-4">
+                <h3 class="card-title">Need inspiration? Try these samples:</h3>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem;">
+                    <button type="button" class="btn btn-secondary sample-btn" 
+                            data-sample="The new product launch exceeded all expectations, with customers praising the innovative features and exceptional quality. Sales have increased by 200% in the first week, and the company is celebrating a major milestone in their growth journey.">
+                        ✅ Positive Review
+                    </button>
+                    <button type="button" class="btn btn-secondary sample-btn" 
+                            data-sample="The service was disappointing and fell short of expectations. Long wait times, unhelpful staff, and poor quality made for a frustrating experience. I would not recommend this to anyone and hope they improve their standards.">
+                        ❌ Negative Review
+                    </button>
+                    <button type="button" class="btn btn-secondary sample-btn" 
+                            data-sample="Artificial intelligence is transforming the way we live and work. From healthcare to transportation, AI systems are becoming increasingly sophisticated and capable. However, this rapid advancement also raises important questions about ethics, privacy, and the future of human employment.">
+                        🤖 Tech Article
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <p class="footer-text">
+                    © 2024 Text Analyzer. Powered by LangGraph & Ollama.
+                </p>
+                <ul class="footer-links">
+                    <li><a href="https://github.com" target="_blank">GitHub</a></li>
+                    <li><a href="/about">Documentation</a></li>
+                    <li><a href="https://python-langchain.readthedocs.io/en/latest/modules/agents/tools/examples/human_input.html" target="_blank">LangGraph</a></li>
+                </ul>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

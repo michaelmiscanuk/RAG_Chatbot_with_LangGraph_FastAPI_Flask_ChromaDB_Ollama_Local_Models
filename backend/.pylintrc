@@ -1,0 +1,5 @@
+[MASTER]
+disable=import-error,no-name-in-module
+
+[TYPECHECK]
+ignored-modules=langchain.*,langchain_ollama.*,langgraph.*

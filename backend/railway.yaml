@@ -1,0 +1,39 @@
+# Railway Deployment Configuration
+# https://docs.railway.app/deploy/railway-yaml
+
+build:
+  builder: nixpacks
+  nixpacksPlan:
+    phases:
+      setup:
+        nixPkgs:
+          - python312
+      install:
+        cmds:
+          - pip install uv
+          - uv pip install -e .
+      build:
+        cmds:
+          - chmod +x start.sh
+          - echo "Build complete"
+
+deploy:
+  startCommand: ./start.sh
+  restartPolicyType: on_failure
+  restartPolicyMaxRetries: 10
+
+services:
+  - name: text-analysis-backend
+    root: backend
+    envVars:
+      - name: PYTHON_VERSION
+        value: "3.12"
+      - name: PORT
+        value: "8000"
+      - name: OLLAMA_HOST
+        # You'll need to set this in Railway dashboard to your Ollama instance URL
+        # Railway doesn't support Ollama natively, so you'll need to:
+        # 1. Deploy Ollama separately (e.g., on a different service)
+        # 2. Or use Ollama's cloud API
+        # 3. Or use a different LLM provider that has HTTP API
+        value: "http://localhost:11434"

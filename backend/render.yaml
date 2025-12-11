@@ -1,0 +1,25 @@
+# Render.com deployment configuration for Backend API
+
+services:
+  # Backend API Service
+  - type: web
+    name: text-analysis-backend
+    env: python
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn api:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: OLLAMA_BASE_URL
+        value: http://localhost:11434
+        # Note: You'll need to configure Ollama separately or use a hosted LLM service
+      - key: PORT
+        value: 8000
+    # Add your environment variables in Render dashboard:
+    # - API keys
+    # - Model configurations
+    # - CORS allowed origins (add your Vercel frontend URL)

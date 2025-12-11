@@ -1,0 +1,115 @@
+######################
+[Our Input]
+The company's quarterly earnings fell short of expectations, causing stock
+prices to drop by 15 percent. Investors expressed concerns about the future
+outlook, and analysts are recommending caution in the technology sector.
+--------
+[OUTPUT]
+
+======================================================================
+TEXT ANALYSIS RESULTS
+======================================================================
+
+INPUT STATISTICS:
+  - Characters: 223
+  - Words: 32
+
+SUMMARY:
+Despite a negative quarterly sales report, stocks' price dropped by 15% due to
+market volatility. Analysts are advising investors to stay cautious in the tech
+industry.
+
+SENTIMENT:
+  NEGATIVE
+
+======================================================================
+
+
+######################
+[Our Input]
+The company's quarterly earnings fell short of expectations, causing stock
+prices to drop by 15 percent. Investors expressed concerns about the future
+outlook, and analysts are recommending caution in the technology sector.
+--------
+[OUTPUT]
+
+======================================================================
+TEXT ANALYSIS RESULTS
+======================================================================
+
+INPUT STATISTICS:
+  - Characters: 223
+  - Words: 32
+
+SUMMARY:
+The company's quarterly earnings were disappointing, and investors were concerned about the future market. Analysts are advising caution in the tech sector to manage their risks better.
+
+SENTIMENT:
+  NEGATIVE
+
+======================================================================
+
+
+######################
+[Our Input]
+Artificial intelligence is transforming the way we live and work. From healthcare to transportation, AI systems are becoming increasingly sophisticated and capable. However, this rapid advancement also raises important questions about ethics, privacy, and the future of human employment.
+--------
+[OUTPUT]
+
+======================================================================
+TEXT ANALYSIS RESULTS
+======================================================================
+
+INPUT STATISTICS:
+  - Characters: 287
+  - Words: 39
+
+SUMMARY:
+This is a mock summary of the provided text. It captures the main points and provides a concise overview.
+
+SENTIMENT:
+  NEUTRAL
+
+======================================================================
+
+
+######################
+[Our Input]
+The company's quarterly earnings fell short of expectations, causing stock
+prices to drop by 15 percent. Investors expressed concerns about the future
+outlook, and analysts are recommending caution in the technology sector.
+--------
+[OUTPUT]
+ ====================================================================== TEXT
+ANALYSIS RESULTS
+======================================================================  INPUT
+STATISTICS:   - Characters: 223   - Words: 32  SUMMARY: This is a mock summary
+of the provided text. It captures the main points and provides a concise
+overview.  SENTIMENT:   NEUTRAL
+======================================================================
+
+######################
+[Our Input]
+The company's quarterly earnings fell short of expectations, causing stock
+prices to drop by 15 percent. Investors expressed concerns about the future
+outlook, and analysts are recommending caution in the technology sector.
+--------
+[OUTPUT]
+
+======================================================================
+TEXT ANALYSIS RESULTS
+======================================================================
+
+INPUT STATISTICS:
+  - Characters: 223
+  - Words: 32
+
+SUMMARY:
+This is a mock summary of the provided text. It captures the main points and provides a concise overview.
+
+SENTIMENT:
+  NEUTRAL
+
+======================================================================
+
+

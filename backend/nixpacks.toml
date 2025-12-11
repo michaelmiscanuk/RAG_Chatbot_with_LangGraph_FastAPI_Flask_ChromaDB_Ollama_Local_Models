@@ -1,0 +1,17 @@
+# Nixpacks configuration for Railway deployment
+# This tells Nixpacks how to build your Python Poetry project
+
+[phases.setup]
+nixPkgs = ["python312", "poetry"]
+
+[phases.install]
+cmds = [
+  "poetry config virtualenvs.create false",
+  "poetry install --no-root --no-interaction --no-ansi"
+]
+
+[phases.build]
+cmds = ["chmod +x start.sh", "echo 'Build complete'"]
+
+[start]
+cmd = "./start.sh"

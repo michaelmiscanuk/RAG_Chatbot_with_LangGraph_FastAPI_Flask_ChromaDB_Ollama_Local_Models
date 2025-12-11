@@ -1,0 +1,10 @@
+{
+    "dependencies": [
+        "."
+    ],
+    "graphs": {
+        "text_analysis": "./src/graph/workflow.py:create_workflow"
+    },
+    "env": ".env",
+    "python_version": "3.11"
+}
