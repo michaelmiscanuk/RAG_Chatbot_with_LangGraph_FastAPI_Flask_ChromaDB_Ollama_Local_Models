@@ -17,20 +17,7 @@ class MockChatOllama:
     """Mock ChatOllama for testing without Ollama"""
 
     def invoke(self, messages):
-        # Mock responses based on the prompt
-        prompt = messages[1].content if len(messages) > 1 else ""
-        if "Summarize" in prompt:
-            return type(
-                "Response",
-                (),
-                {
-                    "content": "This is a mock summary of the provided text. It captures the main points and provides a concise overview."
-                },
-            )()
-        elif "sentiment" in prompt.lower():
-            return type("Response", (), {"content": "neutral"})()
-        else:
-            return type("Response", (), {"content": "Mock response"})()
+        return type("Response", (), {"content": "Mock response from Chatbot"})()
 
 
 class ModelConfig:
@@ -120,60 +107,6 @@ def get_model(
     except Exception as e:
         print(f"Ollama not available, using mock model. Error: {str(e)}")
         return MockChatOllama()
-
-
-# Predefined model configurations for different use cases
-MODEL_PRESETS = {
-    "creative": ModelConfig(
-        model_name="llama3.2",
-        temperature=0.9,
-        top_p=0.95,
-    ),
-    "balanced": ModelConfig(
-        model_name="llama3.2",
-        temperature=0.7,
-        top_p=0.9,
-    ),
-    "precise": ModelConfig(
-        model_name="llama3.2",
-        temperature=0.3,
-        top_p=0.8,
-    ),
-    "deterministic": ModelConfig(
-        model_name="llama3.2",
-        temperature=0.0,
-        top_p=1.0,
-    ),
-}
-
-
-def get_model_from_preset(preset_name: str = "balanced") -> ChatOllama:
-    """
-    Get a model using a predefined preset configuration
-
-    Args:
-        preset_name: Name of the preset ('creative', 'balanced', 'precise', 'deterministic')
-
-    Returns:
-        Configured ChatOllama instance
-
-    Example:
-        >>> model = get_model_from_preset("creative")
-    """
-    if preset_name not in MODEL_PRESETS:
-        raise ValueError(
-            f"Unknown preset: {preset_name}. "
-            f"Available presets: {list(MODEL_PRESETS.keys())}"
-        )
-
-    config = MODEL_PRESETS[preset_name]
-    return ChatOllama(
-        model=config.model_name,
-        temperature=config.temperature,
-        base_url=config.base_url,
-        num_ctx=config.num_ctx,
-        format="",
-    )
 
 
 def get_langchain_azure_embedding_model(model_name="text-embedding-3-large__test1"):

@@ -46,98 +46,6 @@ def about():
     return render_template("about.html")
 
 
-@app.route("/api/analyze", methods=["POST"])
-def analyze():
-    """
-    Proxy endpoint to backend API
-
-    This endpoint receives the form data from the frontend,
-    forwards it to the FastAPI backend, and returns the results.
-    """
-    try:
-        # Get form data
-        data = request.get_json()
-        text = data.get("text", "").strip()
-        model_name = data.get("model_name", "qwen2.5-coder:0.5b")
-
-        if not text:
-            return (
-                jsonify(
-                    {"success": False, "error": "Please enter some text to analyze"}
-                ),
-                400,
-            )
-
-        if len(text) > 10000:
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Text is too long. Maximum 10,000 characters allowed.",
-                    }
-                ),
-                400,
-            )
-
-        logger.info(f"Received request to analyze {len(text)} characters")
-
-        # Forward request to backend API
-        backend_url = f"{API_BASE_URL}/api/analyze"
-        logger.info(f"Forwarding to backend: {backend_url}")
-
-        response = requests.post(
-            backend_url,
-            json={"text": text, "model_name": model_name},
-            timeout=60,  # 60 second timeout for LLM processing
-        )
-
-        # Check if request was successful
-        if response.status_code == 200:
-            result = response.json()
-            logger.info("Analysis completed successfully")
-            return jsonify(result), 200
-        else:
-            error_detail = response.json().get("detail", "Unknown error")
-            logger.error(f"Backend error: {error_detail}")
-            return (
-                jsonify({"success": False, "error": f"Backend error: {error_detail}"}),
-                response.status_code,
-            )
-
-    except requests.exceptions.Timeout:
-        logger.error("Request timeout")
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": "Request timeout. The analysis is taking too long. Please try with shorter text.",
-                }
-            ),
-            504,
-        )
-
-    except requests.exceptions.ConnectionError:
-        logger.error(f"Cannot connect to backend at {API_BASE_URL}")
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": "Cannot connect to backend API. Please make sure the backend is running.",
-                }
-            ),
-            503,
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
-        return (
-            jsonify(
-                {"success": False, "error": f"An unexpected error occurred: {str(e)}"}
-            ),
-            500,
-        )
-
-
 @app.route("/api/chat", methods=["POST"])
 def chat():
     """
@@ -202,35 +110,6 @@ def chat():
                 {"success": False, "error": f"An unexpected error occurred: {str(e)}"}
             ),
             500,
-        )
-
-
-@app.route("/api/models", methods=["GET"])
-def get_models():
-    """
-    Get available models from backend
-    """
-    try:
-        backend_url = f"{API_BASE_URL}/api/models"
-        response = requests.get(backend_url, timeout=5)
-
-        if response.status_code == 200:
-            return jsonify(response.json()), 200
-        else:
-            return (
-                jsonify(
-                    {"models": ["qwen2.5-coder:0.5b"], "default": "qwen2.5-coder:0.5b"}
-                ),
-                200,
-            )
-
-    except Exception as e:
-        logger.error(f"Error fetching models: {str(e)}")
-        return (
-            jsonify(
-                {"models": ["qwen2.5-coder:0.5b"], "default": "qwen2.5-coder:0.5b"}
-            ),
-            200,
         )
 
 
