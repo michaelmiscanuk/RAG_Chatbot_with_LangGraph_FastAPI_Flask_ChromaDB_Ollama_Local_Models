@@ -1,12 +1,9 @@
 #!/bin/bash
 set -e
 
-# Unzip ChromaDB if needed
-if [ -f "data/chroma_db.tar.xz" ] && [ ! -d "data/chroma_db" ]; then
-    echo "Extracting ChromaDB..."
-    python3 -c "import lzma, tarfile; f = lzma.open('data/chroma_db.tar.xz', 'rb'); tarfile.open(fileobj=f, mode='r').extractall('data'); f.close()"
-    echo "ChromaDB extracted successfully."
-fi
+# Decompress ChromaDB if needed
+echo "Checking for ChromaDB compressed files..."
+python3 ../decompress_files.py
 
 # Use the PORT environment variable provided by Railway, or default to 8000
 PORT="${PORT:-8000}"

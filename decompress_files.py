@@ -140,14 +140,14 @@ def main():
     #     print("❌ Download failed. Cannot proceed.")
     #     return
 
-    # Step 2: Unzip all files
-    print("\nStep 2: Starting unzip process...")
-    for path in PATHS_TO_UNZIP:
+    # Step 2: Decompress all files
+    print("\nStep 2: Starting decompression process...")
+    for path in PATHS_TO_DECOMPRESS:
         print(f"\n{'='*60}")
-        unzip_path(path)
+        decompress_path(path)
 
     print("\n" + "=" * 60)
-    print("Unzip process completed!")
+    print("Decompression process completed!")
 
 
 if __name__ == "__main__":
