@@ -25,11 +25,11 @@ pip install uv
 uv pip install -e .
 echo.
 
-REM Unzip ChromaDB if needed
-if exist "data\chroma_db.zip" (
+REM Decompress ChromaDB if needed
+if exist "data\chroma_db.tar.xz" (
     if not exist "data\chroma_db" (
         echo Extracting ChromaDB...
-        python -c "import zipfile; zipfile.ZipFile('data/chroma_db.zip', 'r').extractall('data')"
+        python -c "import lzma, tarfile; f = lzma.open('data/chroma_db.tar.xz', 'rb'); tarfile.open(fileobj=f, mode='r').extractall('data'); f.close()"
         echo ChromaDB extracted successfully.
         echo.
     )

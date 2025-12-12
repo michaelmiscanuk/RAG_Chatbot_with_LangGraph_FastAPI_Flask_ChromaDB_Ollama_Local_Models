@@ -2,9 +2,9 @@
 set -e
 
 # Unzip ChromaDB if needed
-if [ -f "data/chroma_db.zip" ] && [ ! -d "data/chroma_db" ]; then
+if [ -f "data/chroma_db.tar.xz" ] && [ ! -d "data/chroma_db" ]; then
     echo "Extracting ChromaDB..."
-    python3 -c "import zipfile; zipfile.ZipFile('data/chroma_db.zip', 'r').extractall('data')"
+    python3 -c "import lzma, tarfile; f = lzma.open('data/chroma_db.tar.xz', 'rb'); tarfile.open(fileobj=f, mode='r').extractall('data'); f.close()"
     echo "ChromaDB extracted successfully."
 fi
 
